@@ -6,7 +6,7 @@ export const scrapeLinkedin = async (
   userName = '',
   userPassword = '',
   showBrowser = false,
-  saveDirectory = './result.json'
+  saveDirectory = './result.csv'
 ) => {
   const browser = await puppeteer.launch({ headless: showBrowser });
   const page = await browser.newPage();
@@ -47,27 +47,32 @@ export const scrapeLinkedin = async (
                 arrFromTable[arrFromTable.indexOf('Company size') + 1];
 
             return {
-              companyName: companyName,
-              website: website,
-              numEmployees: numEmployees,
+              companyName,
+              website,
+              numEmployees,
             };
           })
           .catch((e) => console.dir(e));
-        company ? result.push(company) : console.log('error company');
-        fs.appendFileSync(saveDirectory, JSON.stringify(company), (error) => {
-          if (error) console.log('Error writing to file', error);
-        });
 
         const separator = ';';
         const hebrew = '\uFEFF';
 
-        fs.appendFileSync(
-          './result.csv',
-          `${hebrew}${company.companyName}${separator}${company.website}${separator}${company.numEmployees}\n`,
-          (error) => {
-            if (error) console.log('Error writing to file', error);
-          }
-        );
+        if (company) {
+          result.push(company);
+          fs.appendFileSync(
+            saveDirectory,
+            `${hebrew}${company.companyName}${separator}${company.website}${separator}${company.numEmployees}\n`,
+            (error) => {
+              if (error) console.log('Error writing to file', error);
+            }
+          );
+        } else {
+          console.log('Company error');
+        }
+
+        // fs.appendFileSync(saveDirectory, JSON.stringify(company), (error) => {
+        //   if (error) console.log('Error writing to file', error);
+        // });
       } catch {
         console.log('error from loop');
       }
@@ -75,5 +80,6 @@ export const scrapeLinkedin = async (
   })();
 
   browser.close();
+  console.log(result);
   return result;
 };
