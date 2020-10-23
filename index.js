@@ -8,8 +8,8 @@ fs.createReadStream('../../../Downloads/רשימת לקוחות - רשימת ל�
   .on('data', (data) => loadedData.push(data))
   .on('end', () => {
     const urlList = loadedData
-      .map((company) => company['לינקדין'])
-      .filter((link) => link.includes('http'));
+      .filter((company) => company['לינקדין'].includes('http'))
+      .map((company) => company['לינקדין']);
     console.log(urlList);
     scrapeLinkedin(urlList);
   });
