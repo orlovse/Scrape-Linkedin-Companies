@@ -6,7 +6,9 @@ export const scrapeLinkedin = async (
   userName = '',
   userPassword = '',
   showBrowser = false,
-  saveDirectory = './result.csv'
+  saveDirectory = './result.csv',
+  separator = ';',
+  hebrew = '\uFEFF'
 ) => {
   const browser = await puppeteer.launch({ headless: showBrowser });
   const page = await browser.newPage();
@@ -28,7 +30,11 @@ export const scrapeLinkedin = async (
         if (!url.includes('about')) url = url + '/about';
 
         await page.goto(url);
-        await page.waitForTimeout(2000);
+
+        await page.waitForSelector('section');
+        await page.waitForTimeout(2000).then(() => console.log('timeout'));
+
+        let row = '';
         const company = await page
           .evaluate(() => {
             let aboutCompanyTable = document.querySelector('dl')
@@ -37,6 +43,7 @@ export const scrapeLinkedin = async (
             let companyName = document.querySelector('section h1 span')
               ? document.querySelector('section h1 span').innerText || 'none'
               : 'none';
+
             const arrFromTable = aboutCompanyTable.split('\n');
             let website = 'none';
             let numEmployees = 'none';
@@ -54,25 +61,89 @@ export const scrapeLinkedin = async (
           })
           .catch((e) => console.dir(e));
 
-        const separator = ';';
-        const hebrew = '\uFEFF';
-
         if (company) {
           result.push(company);
-          fs.appendFileSync(
-            saveDirectory,
-            `${hebrew}${company.companyName}${separator}${company.website}${separator}${company.numEmployees}\n`,
-            (error) => {
-              if (error) console.log('Error writing to file', error);
-            }
-          );
+          row =
+            hebrew +
+            company.companyName +
+            separator +
+            company.website +
+            separator +
+            company.numEmployees;
+          // row = `${hebrew}${company.companyName}${separator}${company.website}${separator}${company.numEmployees}`;
         } else {
           console.log('Company error');
         }
 
-        // fs.appendFileSync(saveDirectory, JSON.stringify(company), (error) => {
-        //   if (error) console.log('Error writing to file', error);
-        // });
+        await page.click('a[href^="/search/results/people"]');
+
+        await page.waitForSelector('ul');
+        await page.waitForTimeout(2000).then(() => console.log('timeout2'));
+
+        if (true) {
+          await page.goto('https://www.linkedin.com/in/naim-berger-619b34111/');
+          await page.waitForSelector('ul li');
+          await page.waitForTimeout(1500).then(() => console.log('timeout3'));
+
+          const nameAndCompany = await page
+            .evaluate(() => {
+              let name = document.querySelector('section>div>div>div>ul>li')
+                ? document.querySelector('section>div>div>div>ul>li').innerText
+                : 'none';
+
+              let company = document.querySelector('section>div>div>div>h2')
+                ? document.querySelector('section>div>div>div>h2').innerText
+                : 'none';
+
+              return {
+                name,
+                company,
+              };
+            })
+            .catch((e) => console.dir(e));
+
+          if (nameAndCompany) {
+            row =
+              row +
+              separator +
+              nameAndCompany.name +
+              separator +
+              nameAndCompany.company;
+          } else {
+            console.log('error from nameAndCompany');
+          }
+
+          await page.click('a[href$="/contact-info/"]');
+          await page.waitForSelector('.section-info');
+          await page.waitForTimeout(1500).then(() => console.log('timeout4'));
+
+          const info = await page
+            .evaluate(() => {
+              const separator = ';';
+
+              let infoArr = document.querySelectorAll('.section-info>section')
+                ? [...document.querySelectorAll('.section-info>section')]
+                : [];
+
+              const info =
+                infoArr.length !== 0
+                  ? infoArr.reduce(
+                      (acc, infoEl) =>
+                        acc + infoEl.innerText.replace(/\n+/g, ' ') + separator,
+                      ''
+                    )
+                  : null;
+
+              return separator + info;
+            })
+            .catch((e) => console.dir(e));
+
+          row = row + info;
+        }
+
+        fs.appendFileSync(saveDirectory, row + '\n', (error) => {
+          if (error) console.log('Error writing to file', error);
+        });
       } catch {
         console.log('error from loop');
       }
