@@ -7,9 +7,11 @@ export const scrapeLinkedin = async (
   userPassword = '',
   showBrowser = false,
   saveDirectory = './result.csv',
+  timeout = 1500,
   separator = ';',
   hebrew = '\uFEFF'
 ) => {
+  //login
   const browser = await puppeteer.launch({ headless: showBrowser });
   const page = await browser.newPage();
   await page.goto('https://www.linkedin.com/login');
@@ -19,22 +21,24 @@ export const scrapeLinkedin = async (
   await page.waitForSelector(inputUser);
   await page.type(inputUser, userName);
   await page.type(inputPass, userPassword);
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(timeout);
   await page.click('div.login__form_action_container button');
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(timeout);
 
-  let result = [];
+  //loop on array links from params
   await (async () => {
     for await (let url of urlList) {
       try {
         if (!url.includes('about')) url = url + '/about';
 
         await page.goto(url);
-
         await page.waitForSelector('section');
-        await page.waitForTimeout(2000).then(() => console.log('timeout'));
+        await page.waitForTimeout(timeout).then(() => console.log('timeout'));
 
+        //row to write to .csv
         let row = '';
+
+        //scrape company from page
         const company = await page
           .evaluate(() => {
             let aboutCompanyTable = document.querySelector('dl')
@@ -61,8 +65,8 @@ export const scrapeLinkedin = async (
           })
           .catch((e) => console.dir(e));
 
+        //add company to row
         if (company) {
-          result.push(company);
           row =
             hebrew +
             company.companyName +
@@ -70,20 +74,22 @@ export const scrapeLinkedin = async (
             company.website +
             separator +
             company.numEmployees;
-          // row = `${hebrew}${company.companyName}${separator}${company.website}${separator}${company.numEmployees}`;
         } else {
           console.log('Company error');
         }
 
+        //go to employees page
         await page.click('a[href^="/search/results/people"]');
-
         await page.waitForSelector('ul');
-        await page.waitForTimeout(2000).then(() => console.log('timeout2'));
+        await page.waitForTimeout(timeout).then(() => console.log('timeout2'));
 
+        //find founders (now mock)
         if (true) {
           await page.goto('https://www.linkedin.com/in/naim-berger-619b34111/');
           await page.waitForSelector('ul li');
-          await page.waitForTimeout(1500).then(() => console.log('timeout3'));
+          await page
+            .waitForTimeout(timeout)
+            .then(() => console.log('timeout3'));
 
           const nameAndCompany = await page
             .evaluate(() => {
@@ -102,6 +108,7 @@ export const scrapeLinkedin = async (
             })
             .catch((e) => console.dir(e));
 
+          //add founder name to row
           if (nameAndCompany) {
             row =
               row +
@@ -113,10 +120,14 @@ export const scrapeLinkedin = async (
             console.log('error from nameAndCompany');
           }
 
+          //open founder info
           await page.click('a[href$="/contact-info/"]');
           await page.waitForSelector('.section-info');
-          await page.waitForTimeout(1500).then(() => console.log('timeout4'));
+          await page
+            .waitForTimeout(timeout)
+            .then(() => console.log('timeout4'));
 
+          //scrape founder info
           const info = await page
             .evaluate(() => {
               const separator = ';';
@@ -138,9 +149,11 @@ export const scrapeLinkedin = async (
             })
             .catch((e) => console.dir(e));
 
+          //add founder info to row
           row = row + info;
         }
 
+        //add row to .csv
         fs.appendFileSync(saveDirectory, row + '\n', (error) => {
           if (error) console.log('Error writing to file', error);
         });
