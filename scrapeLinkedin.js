@@ -78,80 +78,120 @@ export const scrapeLinkedin = async (
           console.log('Company error');
         }
 
+        //remove Messaging from page
+        await page.evaluate(() => {
+          document.querySelector('#msg-overlay').remove();
+        });
+
         //go to employees page
         await page.click('a[href^="/search/results/people"]');
         await page.waitForSelector('ul');
         await page.waitForTimeout(timeout).then(() => console.log('timeout2'));
 
-        //find founders (now mock)
-        if (true) {
-          await page.goto('https://www.linkedin.com/in/naim-berger-619b34111/');
-          await page.waitForSelector('ul li');
-          await page
-            .waitForTimeout(timeout)
-            .then(() => console.log('timeout3'));
+        //find founders
+        const founders = await page
+          .evaluate(() => {
+            let employeeArr = [
+              ...document.querySelectorAll('ul.search-results__list>li'),
+            ];
+            const founders = employeeArr.filter(
+              (employee) =>
+                employee.innerText.includes('CEO') ||
+                employee.innerText.includes('Founder') ||
+                employee.innerText.includes('Partner')
+            );
 
-          const nameAndCompany = await page
-            .evaluate(() => {
-              let name = document.querySelector('section>div>div>div>ul>li')
-                ? document.querySelector('section>div>div>div>ul>li').innerText
-                : 'none';
+            const result = [];
+            if (founders)
+              founders.map((founder) => {
+                const link = founder.querySelector('a').getAttribute('href');
+                result.push(link);
+              });
 
-              let company = document.querySelector('section>div>div>div>h2')
-                ? document.querySelector('section>div>div>div>h2').innerText
-                : 'none';
+            return result;
+          })
+          .catch((e) => console.dir(e));
 
-              return {
-                name,
-                company,
-              };
-            })
-            .catch((e) => console.dir(e));
+        console.log('founders', founders);
 
-          //add founder name to row
-          if (nameAndCompany) {
-            row =
-              row +
-              separator +
-              nameAndCompany.name +
-              separator +
-              nameAndCompany.company;
-          } else {
-            console.log('error from nameAndCompany');
+        //go to founders pages
+        if (founders.length !== 0)
+          for await (let link of founders) {
+            if (link.includes('in')) {
+              await page.goto('https://www.linkedin.com' + link);
+              await page.waitForSelector('ul li');
+              await page
+                .waitForTimeout(timeout)
+                .then(() => console.log('timeout3'));
+
+              //find founder name and company
+              const nameAndCompany = await page
+                .evaluate(() => {
+                  let name = document.querySelector('section>div>div>div>ul>li')
+                    ? document.querySelector('section>div>div>div>ul>li')
+                        .innerText
+                    : 'none';
+
+                  let company = document.querySelector('section>div>div>div>h2')
+                    ? document.querySelector('section>div>div>div>h2').innerText
+                    : 'none';
+
+                  return {
+                    name,
+                    company,
+                  };
+                })
+                .catch((e) => console.dir(e));
+
+              //add founder name to row
+              if (nameAndCompany) {
+                row =
+                  row +
+                  separator +
+                  nameAndCompany.name +
+                  separator +
+                  nameAndCompany.company;
+              } else {
+                console.log('error from nameAndCompany');
+              }
+
+              //open founder info
+              await page.click('a[href$="/contact-info/"]');
+              await page.waitForSelector('.section-info');
+              await page
+                .waitForTimeout(timeout)
+                .then(() => console.log('timeout4'));
+
+              //scrape founder info
+              const info = await page
+                .evaluate(() => {
+                  const separator = ';';
+
+                  let infoArr = document.querySelectorAll(
+                    '.section-info>section'
+                  )
+                    ? [...document.querySelectorAll('.section-info>section')]
+                    : [];
+
+                  const info =
+                    infoArr.length !== 0
+                      ? infoArr.reduce(
+                          (acc, infoEl) =>
+                            acc +
+                            infoEl.innerText.replace(/\n+/g, ' ') +
+                            separator,
+                          ''
+                        )
+                      : null;
+
+                  return separator + info;
+                })
+                .catch((e) => console.dir(e));
+
+              //add founder info to row
+              row = row + info;
+            }
           }
-
-          //open founder info
-          await page.click('a[href$="/contact-info/"]');
-          await page.waitForSelector('.section-info');
-          await page
-            .waitForTimeout(timeout)
-            .then(() => console.log('timeout4'));
-
-          //scrape founder info
-          const info = await page
-            .evaluate(() => {
-              const separator = ';';
-
-              let infoArr = document.querySelectorAll('.section-info>section')
-                ? [...document.querySelectorAll('.section-info>section')]
-                : [];
-
-              const info =
-                infoArr.length !== 0
-                  ? infoArr.reduce(
-                      (acc, infoEl) =>
-                        acc + infoEl.innerText.replace(/\n+/g, ' ') + separator,
-                      ''
-                    )
-                  : null;
-
-              return separator + info;
-            })
-            .catch((e) => console.dir(e));
-
-          //add founder info to row
-          row = row + info;
-        }
 
         //add row to .csv
         fs.appendFileSync(saveDirectory, row + '\n', (error) => {
@@ -164,6 +204,4 @@ export const scrapeLinkedin = async (
   })();
 
   browser.close();
-  console.log(result);
-  return result;
 };
