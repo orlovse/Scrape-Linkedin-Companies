@@ -1,19 +1,7 @@
 import puppeteer from 'puppeteer';
 import fs from 'fs';
 
-export const scrapeLinkedin = async (
-  urlList = [],
-  userName = '',
-  userPassword = '',
-  showBrowser = false,
-  saveDirectory = './result.csv',
-  timeout = 1500,
-  separator = ';',
-  hebrew = '\uFEFF'
-) => {
-  //login
-  const browser = await puppeteer.launch({ headless: showBrowser });
-  const page = await browser.newPage();
+const login = async (page, userName, userPassword, timeout) => {
   await page.goto('https://www.linkedin.com/login');
   const inputUser = '#username';
   const inputPass = '#password';
@@ -24,6 +12,96 @@ export const scrapeLinkedin = async (
   await page.waitForTimeout(timeout);
   await page.click('div.login__form_action_container button');
   await page.waitForTimeout(timeout);
+};
+
+const scrapeCompany = async (page) =>
+  await page
+    .evaluate(() => {
+      let aboutCompanyTable = document.querySelector('dl')
+        ? document.querySelector('dl').innerText || 'none'
+        : 'none';
+      let companyName = document.querySelector('section h1 span')
+        ? document.querySelector('section h1 span').innerText || 'none'
+        : 'none';
+
+      const arrFromTable = aboutCompanyTable.split('\n');
+      let website = 'none';
+      let numEmployees = 'none';
+      if (arrFromTable.includes('Website'))
+        website = arrFromTable[arrFromTable.indexOf('Website') + 1];
+      if (arrFromTable.includes('Company size'))
+        numEmployees = arrFromTable[arrFromTable.indexOf('Company size') + 1];
+
+      return {
+        companyName,
+        website,
+        numEmployees,
+      };
+    })
+    .catch((e) => console.dir(e));
+
+const scrapeFounders = async (page) =>
+  await page
+    .evaluate(() => {
+      let employeeArr = [
+        ...document.querySelectorAll('ul.search-results__list>li'),
+      ];
+      const founders = employeeArr.filter(
+        (employee) =>
+          employee.innerText.includes('CEO') ||
+          employee.innerText.includes('Founder') ||
+          employee.innerText.includes('Partner')
+      );
+
+      const result = [];
+      if (founders)
+        founders.map((founder) => {
+          const link = founder.querySelector('a').getAttribute('href');
+          result.push(link);
+        });
+
+      return result;
+    })
+    .catch((e) => console.dir(e));
+
+const scrapeFounderInfo = async (page) =>
+  await page
+    .evaluate(() => {
+      let infoArr = document.querySelectorAll('.section-info>section')
+        ? [...document.querySelectorAll('.section-info>section')]
+        : [];
+
+      const separator = ';';
+
+      const info =
+        infoArr.length !== 0
+          ? infoArr.reduce(
+              (acc, infoEl) =>
+                acc + infoEl.innerText.replace(/\n+/g, ' ') + separator,
+              ''
+            )
+          : null;
+
+      return separator + info;
+    })
+    .catch((e) => console.dir(e));
+
+export const scrapeLinkedin = async (
+  urlList = [],
+  userName = '',
+  userPassword = '',
+  showBrowser = false,
+  saveDirectory = './result.csv',
+  timeout = 1500,
+  separator = ';',
+  hebrew = '\uFEFF'
+) => {
+  //open browser
+  const browser = await puppeteer.launch({ headless: showBrowser });
+  const page = await browser.newPage();
+
+  //login
+  await login(page, userName, userPassword, timeout);
 
   //loop on array links from params
   await (async () => {
@@ -39,31 +117,7 @@ export const scrapeLinkedin = async (
         let row = '';
 
         //scrape company from page
-        const company = await page
-          .evaluate(() => {
-            let aboutCompanyTable = document.querySelector('dl')
-              ? document.querySelector('dl').innerText || 'none'
-              : 'none';
-            let companyName = document.querySelector('section h1 span')
-              ? document.querySelector('section h1 span').innerText || 'none'
-              : 'none';
-
-            const arrFromTable = aboutCompanyTable.split('\n');
-            let website = 'none';
-            let numEmployees = 'none';
-            if (arrFromTable.includes('Website'))
-              website = arrFromTable[arrFromTable.indexOf('Website') + 1];
-            if (arrFromTable.includes('Company size'))
-              numEmployees =
-                arrFromTable[arrFromTable.indexOf('Company size') + 1];
-
-            return {
-              companyName,
-              website,
-              numEmployees,
-            };
-          })
-          .catch((e) => console.dir(e));
+        const company = await scrapeCompany(page);
 
         //add company to row
         if (company) {
@@ -89,28 +143,7 @@ export const scrapeLinkedin = async (
         await page.waitForTimeout(timeout).then(() => console.log('timeout2'));
 
         //find founders
-        const founders = await page
-          .evaluate(() => {
-            let employeeArr = [
-              ...document.querySelectorAll('ul.search-results__list>li'),
-            ];
-            const founders = employeeArr.filter(
-              (employee) =>
-                employee.innerText.includes('CEO') ||
-                employee.innerText.includes('Founder') ||
-                employee.innerText.includes('Partner')
-            );
-
-            const result = [];
-            if (founders)
-              founders.map((founder) => {
-                const link = founder.querySelector('a').getAttribute('href');
-                result.push(link);
-              });
-
-            return result;
-          })
-          .catch((e) => console.dir(e));
+        const founders = await scrapeFounders(page);
 
         console.log('founders', founders);
 
@@ -163,30 +196,7 @@ export const scrapeLinkedin = async (
                 .then(() => console.log('timeout4'));
 
               //scrape founder info
-              const info = await page
-                .evaluate(() => {
-                  const separator = ';';
-
-                  let infoArr = document.querySelectorAll(
-                    '.section-info>section'
-                  )
-                    ? [...document.querySelectorAll('.section-info>section')]
-                    : [];
-
-                  const info =
-                    infoArr.length !== 0
-                      ? infoArr.reduce(
-                          (acc, infoEl) =>
-                            acc +
-                            infoEl.innerText.replace(/\n+/g, ' ') +
-                            separator,
-                          ''
-                        )
-                      : null;
-
-                  return separator + info;
-                })
-                .catch((e) => console.dir(e));
+              const info = await scrapeFounderInfo(page);
 
               //add founder info to row
               row = row + info;
