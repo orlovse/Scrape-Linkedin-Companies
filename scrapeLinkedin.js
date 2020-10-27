@@ -77,12 +77,10 @@ const scrapeFounderInfo = async (page) =>
         ? [...document.querySelectorAll('.section-info>section')]
         : [];
 
-      // const separator = ';';
       const result = { profile: '', phone: '', email: '' };
 
       if (infoArr.length !== 0) {
         infoArr.map((info) => {
-          // const title = info.innerText;
           const title = info.innerText.split('\n')[0];
           const value = info.innerText.split('\n')[1];
           if (title.includes('Profile')) result.profile = value;
@@ -102,7 +100,7 @@ export const scrapeLinkedin = async (
   showBrowser = false,
   saveDirectory = './result.csv',
   timeout = 1500,
-  separator = ';',
+  separator = ',',
   hebrew = '\uFEFF'
 ) => {
   //open browser
@@ -112,7 +110,9 @@ export const scrapeLinkedin = async (
   //login
   await login(page, userName, userPassword, timeout);
 
+  //result to write to result.json
   const result = [];
+
   //loop on array links from params
   await (async () => {
     for await (let url of urlList) {
@@ -154,7 +154,10 @@ export const scrapeLinkedin = async (
 
         //find founders
         const founders = await scrapeFounders(page);
+
+        //contacts to add to result object
         const contacts = [];
+
         console.log('founders', founders);
 
         //go to founders pages
@@ -167,7 +170,11 @@ export const scrapeLinkedin = async (
                 .waitForTimeout(timeout)
                 .then(() => console.log('timeout3'));
 
+              //contact to push to contacts array
               const contact = {};
+
+              // row to write to contactsToApollo.csv
+              let contactRow = '';
 
               //find founder name and company
               const nameAndCompany = await page
@@ -177,26 +184,36 @@ export const scrapeLinkedin = async (
                         .innerText
                     : 'none';
 
-                  let company = document.querySelector('section>div>div>div>h2')
+                  let position = document.querySelector(
+                    'section>div>div>div>h2'
+                  )
                     ? document.querySelector('section>div>div>div>h2').innerText
                     : 'none';
 
+                  if (position.includes('at'))
+                    position = position.split('at')[1];
+
                   return {
                     name,
-                    company,
+                    position,
                   };
                 })
                 .catch((e) => console.dir(e));
 
               //add founder name to row
               if (nameAndCompany) {
-                contact.name = nameAndCompany.name;
-                row =
-                  row +
+                const { name, position } = nameAndCompany;
+                contact.name = name;
+                contact.position = position;
+                row = row + separator + name + separator + position;
+
+                contactRow =
+                  contactRow +
+                  name.split(' ')[0] +
                   separator +
-                  nameAndCompany.name +
+                  name.split(' ')[1] +
                   separator +
-                  nameAndCompany.company;
+                  row.split(separator)[1];
               } else {
                 console.log('error from nameAndCompany');
               }
@@ -221,11 +238,24 @@ export const scrapeLinkedin = async (
                 separator +
                 phone;
 
+              contactRow = contactRow + separator + profile;
+
               contact.profile = profile;
               contact.email = email;
               contact.phone = phone;
 
               contacts.push(contact);
+
+              //add contactRow to contactsToApollo.csv
+              if (contactRow) {
+                fs.appendFileSync(
+                  './contactsToApollo.csv',
+                  contactRow + '\n',
+                  (error) => {
+                    if (error) console.log('Error writing to file', error);
+                  }
+                );
+              }
             }
           }
 
