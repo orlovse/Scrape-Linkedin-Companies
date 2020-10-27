@@ -30,7 +30,9 @@ const scrapeCompany = async (page) =>
       if (arrFromTable.includes('Website'))
         website = arrFromTable[arrFromTable.indexOf('Website') + 1];
       if (arrFromTable.includes('Company size'))
-        numEmployees = arrFromTable[arrFromTable.indexOf('Company size') + 1];
+        numEmployees = arrFromTable[
+          arrFromTable.indexOf('Company size') + 1
+        ].split(' ')[0];
 
       return {
         companyName,
@@ -49,6 +51,10 @@ const scrapeFounders = async (page) =>
       const founders = employeeArr.filter(
         (employee) =>
           employee.innerText.includes('CEO') ||
+          employee.innerText.includes('CFO') ||
+          employee.innerText.includes('COO') ||
+          employee.innerText.includes('HR') ||
+          employee.innerText.includes('General manager') ||
           employee.innerText.includes('Founder') ||
           employee.innerText.includes('Partner')
       );
@@ -71,20 +77,23 @@ const scrapeFounderInfo = async (page) =>
         ? [...document.querySelectorAll('.section-info>section')]
         : [];
 
-      const separator = ';';
+      // const separator = ';';
+      const result = { profile: '', phone: '', email: '' };
 
-      const info =
-        infoArr.length !== 0
-          ? infoArr.reduce(
-              (acc, infoEl) =>
-                acc + infoEl.innerText.replace(/\n+/g, ' ') + separator,
-              ''
-            )
-          : null;
+      if (infoArr.length !== 0) {
+        infoArr.map((info) => {
+          // const title = info.innerText;
+          const title = info.innerText.split('\n')[0];
+          const value = info.innerText.split('\n')[1];
+          if (title.includes('Profile')) result.profile = value;
+          if (title.includes('Phone')) result.phone = value;
+          if (title.includes('Email')) result.email = value;
+        });
+      }
 
-      return separator + info;
+      return result;
     })
-    .catch((e) => console.dir(e));
+    .catch((e) => console.log('error from scrapeFounderInfo', e));
 
 export const scrapeLinkedin = async (
   urlList = [],
@@ -103,6 +112,7 @@ export const scrapeLinkedin = async (
   //login
   await login(page, userName, userPassword, timeout);
 
+  const result = [];
   //loop on array links from params
   await (async () => {
     for await (let url of urlList) {
@@ -144,7 +154,7 @@ export const scrapeLinkedin = async (
 
         //find founders
         const founders = await scrapeFounders(page);
-
+        const contacts = [];
         console.log('founders', founders);
 
         //go to founders pages
@@ -156,6 +166,8 @@ export const scrapeLinkedin = async (
               await page
                 .waitForTimeout(timeout)
                 .then(() => console.log('timeout3'));
+
+              const contact = {};
 
               //find founder name and company
               const nameAndCompany = await page
@@ -178,6 +190,7 @@ export const scrapeLinkedin = async (
 
               //add founder name to row
               if (nameAndCompany) {
+                contact.name = nameAndCompany.name;
                 row =
                   row +
                   separator +
@@ -196,12 +209,28 @@ export const scrapeLinkedin = async (
                 .then(() => console.log('timeout4'));
 
               //scrape founder info
-              const info = await scrapeFounderInfo(page);
+              const { profile, email, phone } = await scrapeFounderInfo(page);
 
               //add founder info to row
-              row = row + info;
+              row =
+                row +
+                separator +
+                profile +
+                separator +
+                email +
+                separator +
+                phone;
+
+              contact.profile = profile;
+              contact.email = email;
+              contact.phone = phone;
+
+              contacts.push(contact);
             }
           }
+
+        company.contacts = contacts;
+        result.push(company);
 
         //add row to .csv
         fs.appendFileSync(saveDirectory, row + '\n', (error) => {
@@ -212,6 +241,10 @@ export const scrapeLinkedin = async (
       }
     }
   })();
+
+  fs.appendFileSync('./result.json', JSON.stringify(result), (error) => {
+    if (error) console.log('Error writing to file', error);
+  });
 
   browser.close();
 };
