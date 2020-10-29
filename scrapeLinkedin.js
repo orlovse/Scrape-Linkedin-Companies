@@ -238,7 +238,7 @@ export const scrapeLinkedin = async (
                 separator +
                 phone;
 
-              contactRow = contactRow + separator + profile;
+              contactRow = contactRow + separator + profile + separator + email;
 
               contact.profile = profile;
               contact.email = email;
