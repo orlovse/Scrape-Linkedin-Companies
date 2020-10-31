@@ -18,15 +18,15 @@ const scrapeCompany = async (page) =>
   await page
     .evaluate(() => {
       let aboutCompanyTable = document.querySelector('dl')
-        ? document.querySelector('dl').innerText || 'none'
-        : 'none';
+        ? document.querySelector('dl').innerText || ''
+        : '';
       let companyName = document.querySelector('section h1 span')
-        ? document.querySelector('section h1 span').innerText || 'none'
-        : 'none';
+        ? document.querySelector('section h1 span').innerText || ''
+        : '';
 
       const arrFromTable = aboutCompanyTable.split('\n');
-      let website = 'none';
-      let numEmployees = 'none';
+      let website = '';
+      let numEmployees = '';
       if (arrFromTable.includes('Website'))
         website = arrFromTable[arrFromTable.indexOf('Website') + 1];
       if (arrFromTable.includes('Company size'))
@@ -100,7 +100,7 @@ export const scrapeLinkedin = async (
   showBrowser = false,
   saveDirectory = './result.csv',
   timeout = 1500,
-  separator = ',',
+  separator = ';',
   hebrew = '\uFEFF'
 ) => {
   //open browser
@@ -184,13 +184,13 @@ export const scrapeLinkedin = async (
                   let name = document.querySelector('section>div>div>div>ul>li')
                     ? document.querySelector('section>div>div>div>ul>li')
                         .innerText
-                    : 'none';
+                    : '';
 
                   let position = document.querySelector(
                     'section>div>div>div>h2'
                   )
                     ? document.querySelector('section>div>div>div>h2').innerText
-                    : 'none';
+                    : '';
 
                   if (position.includes('at'))
                     position = position.split('at')[1];

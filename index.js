@@ -13,6 +13,7 @@ fs.createReadStream('../../../Downloads/רשימת לקוחות - רשימת ל�
         url: company['לינקדין'],
         cardNumber: company['מספר כרטיס'],
       }));
-    console.log(urlList.length);
+
+    console.log('Number of links: ', urlList.length);
     scrapeLinkedin(urlList);
   });
