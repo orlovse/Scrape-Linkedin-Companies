@@ -115,7 +115,7 @@ export const scrapeLinkedin = async (
 
   //loop on array links from params
   await (async () => {
-    for await (let url of urlList) {
+    for await (let { url, cardNumber } of urlList) {
       try {
         if (!url.includes('about')) url = url + '/about';
 
@@ -132,6 +132,8 @@ export const scrapeLinkedin = async (
         //add company to row
         if (company) {
           row =
+            cardNumber +
+            separator +
             hebrew +
             company.companyName +
             separator +
@@ -260,6 +262,7 @@ export const scrapeLinkedin = async (
           }
 
         company.contacts = contacts;
+        company.cardNumber = cardNumber;
         result.push(company);
 
         //add row to .csv

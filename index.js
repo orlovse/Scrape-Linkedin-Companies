@@ -9,7 +9,10 @@ fs.createReadStream('../../../Downloads/רשימת לקוחות - רשימת ל�
   .on('end', () => {
     const urlList = loadedData
       .filter((company) => company['לינקדין'].includes('http'))
-      .map((company) => company['לינקדין']);
-    console.log(urlList);
+      .map((company) => ({
+        url: company['לינקדין'],
+        cardNumber: company['מספר כרטיס'],
+      }));
+    console.log(urlList.length);
     scrapeLinkedin(urlList);
   });
