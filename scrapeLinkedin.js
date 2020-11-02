@@ -44,19 +44,41 @@ const scrapeCompany = async (page) =>
 
 const scrapeFounders = async (page) =>
   await page
-    .evaluate(() => {
+    .evaluate(async () => {
       let employeeArr = [
         ...document.querySelectorAll('ul.search-results__list>li'),
       ];
+
       const founders = employeeArr.filter(
         (employee) =>
-          employee.innerText.includes('CEO') ||
-          employee.innerText.includes('CFO') ||
-          employee.innerText.includes('COO') ||
-          employee.innerText.includes('HR') ||
-          employee.innerText.includes('General manager') ||
-          employee.innerText.includes('Founder') ||
-          employee.innerText.includes('Partner')
+          employee.innerText.toLowerCase().includes('israel') &&
+          !employee.innerText.toLowerCase().includes('looking for') &&
+          !employee.innerText.toLowerCase().includes('seeking') &&
+          !employee.innerText.toLowerCase().includes('deputy') &&
+          !employee.innerText.toLowerCase().includes('personal assistant') &&
+          !employee.innerText.toLowerCase().includes('assistant') &&
+          (employee.innerText.toLowerCase().includes('ceo') ||
+            employee.innerText
+              .toLowerCase()
+              .includes('chief executive officer') ||
+            employee.innerText
+              .toLowerCase()
+              .includes('chief financial officer') ||
+            employee.innerText
+              .toLowerCase()
+              .includes('chief operating officer') ||
+            employee.innerText.toLowerCase().includes('human resources') ||
+            employee.innerText.toLowerCase().includes('c.e.o') ||
+            employee.innerText.toLowerCase().includes('co-founder') ||
+            employee.innerText.toLowerCase().includes('cfo') ||
+            employee.innerText.toLowerCase().includes('coo') ||
+            employee.innerText.toLowerCase().includes('hr') ||
+            employee.innerText.toLowerCase().includes('vp operations') ||
+            employee.innerText.toLowerCase().includes('site manager') ||
+            employee.innerText.toLowerCase().includes('general manager') ||
+            employee.innerText.toLowerCase().includes('gm') ||
+            employee.innerText.toLowerCase().includes('founder') ||
+            employee.innerText.toLowerCase().includes('partner'))
       );
 
       const result = [];
@@ -68,7 +90,7 @@ const scrapeFounders = async (page) =>
 
       return result;
     })
-    .catch((e) => console.dir(e));
+    .catch((e) => console.log(e));
 
 const scrapeFounderInfo = async (page) =>
   await page
@@ -77,7 +99,7 @@ const scrapeFounderInfo = async (page) =>
         ? [...document.querySelectorAll('.section-info>section')]
         : [];
 
-      const result = { profile: '', phone: '', email: '' };
+      const result = { profile: '', email: '', phone: '' };
 
       if (infoArr.length !== 0) {
         infoArr.map((info) => {
@@ -93,19 +115,42 @@ const scrapeFounderInfo = async (page) =>
     })
     .catch((e) => console.log('error from scrapeFounderInfo', e));
 
+const goToPage = async (page, pageNumber) => {
+  await page.evaluate(() => {
+    const buttons = document.querySelectorAll('button');
+    [...buttons].map(async (link) => {
+      if (link.innerText === pageNumber) {
+        await link.click();
+      }
+    });
+  });
+};
+
+const scrollToBottom = async (page) => {
+  await page.waitForTimeout(timeout);
+  await page.keyboard.press('PageDown');
+  await page.waitForTimeout(timeout);
+  await page.keyboard.press('PageDown');
+  await page.waitForTimeout(timeout);
+};
+
 export const scrapeLinkedin = async (
   urlList = [],
   userName = '',
   userPassword = '',
-  showBrowser = false,
+  dontShowBrowser = false,
   saveDirectory = './result.csv',
-  timeout = 1500,
+  timeout = 3000,
   separator = ';',
   hebrew = '\uFEFF'
 ) => {
   //open browser
-  const browser = await puppeteer.launch({ headless: showBrowser });
+  const browser = await puppeteer.launch({
+    headless: dontShowBrowser,
+    args: ['--start-maximized'],
+  });
   const page = await browser.newPage();
+  await page.setViewport({ width: 1366, height: 768 });
 
   //login
   await login(page, userName, userPassword, timeout);
@@ -137,6 +182,8 @@ export const scrapeLinkedin = async (
             hebrew +
             company.companyName +
             separator +
+            url +
+            separator +
             company.website +
             separator +
             company.numEmployees;
@@ -150,12 +197,75 @@ export const scrapeLinkedin = async (
         });
 
         //go to employees page
-        await page.click('a[href^="/search/results/people"]');
-        await page.waitForSelector('ul');
-        await page.waitForTimeout(timeout).then(() => console.log('timeout2'));
+        await page.evaluate(() => {
+          const allEmployeesLink = document.querySelectorAll(
+            'a[href^="/search/results/people"]'
+          );
+          [...allEmployeesLink].map(async (link) => {
+            if (link.innerText.includes('See all')) {
+              await link.click();
+            }
+          });
+        });
 
-        //find founders
-        const founders = await scrapeFounders(page);
+        //scroll down to pagination
+        await page.waitForTimeout(timeout);
+        await page.keyboard.press('PageDown');
+        await page.waitForTimeout(timeout);
+        await page.keyboard.press('PageDown');
+        await page.waitForTimeout(timeout);
+
+        //does pagination exist
+        const isPagination = await page.$('ul>li>button');
+
+        //scrape founders
+        let founders = await scrapeFounders(page);
+        let foundersPage2 = '';
+        let foundersPage3 = '';
+
+        //if pagination exist go to pages 2 and 3
+        if (isPagination) {
+          await page.evaluate(() => {
+            const buttons = document.querySelectorAll('button');
+            [...buttons].map(async (link) => {
+              if (link.innerText === '2') {
+                await link.click();
+              }
+            });
+          });
+          await page
+            .waitForTimeout(timeout)
+            .then(() => console.log('timeout2'));
+          await page.keyboard.press('PageDown');
+          await page
+            .waitForTimeout(timeout)
+            .then(() => console.log('timeout2'));
+          await page.keyboard.press('PageDown');
+          await page.waitForSelector('ul>li>button');
+          foundersPage2 = await scrapeFounders(page);
+
+          await page.evaluate(() => {
+            const buttons = document.querySelectorAll('button');
+            [...buttons].map(async (link) => {
+              if (link.innerText === '3') {
+                await link.click();
+              }
+            });
+          });
+          await page
+            .waitForTimeout(timeout)
+            .then(() => console.log('timeout2'));
+          await page.keyboard.press('PageDown');
+          await page
+            .waitForTimeout(timeout)
+            .then(() => console.log('timeout2'));
+          await page.keyboard.press('PageDown');
+          await page.waitForSelector('ul>li>button');
+          foundersPage3 = await scrapeFounders(page);
+        }
+
+        await page.waitForTimeout(timeout).then(() => console.log('timeout2'));
+        founders = [...founders, ...foundersPage2, ...foundersPage3];
 
         //contacts to add to result object
         const contacts = [];
@@ -193,7 +303,7 @@ export const scrapeLinkedin = async (
                     : '';
 
                   if (position.includes('at'))
-                    position = position.split('at')[1];
+                    position = position.split('at')[0];
 
                   return {
                     name,
@@ -209,13 +319,14 @@ export const scrapeLinkedin = async (
                 contact.position = position;
                 row = row + separator + name + separator + position;
 
+                const separator2 = ',';
                 contactRow =
                   contactRow +
                   name.split(' ')[0] +
-                  separator +
+                  separator2 +
                   name.split(' ')[1] +
-                  separator +
-                  row.split(separator)[1];
+                  separator2 +
+                  row.split(separator)[2];
               } else {
                 console.log('error from nameAndCompany');
               }
@@ -240,7 +351,9 @@ export const scrapeLinkedin = async (
                 separator +
                 phone;
 
-              contactRow = contactRow + separator + profile + separator + email;
+              const separator3 = ',';
+              contactRow =
+                contactRow + separator3 + profile + separator3 + email;
 
               contact.profile = profile;
               contact.email = email;
@@ -261,8 +374,10 @@ export const scrapeLinkedin = async (
             }
           }
 
-        company.contacts = contacts;
         company.cardNumber = cardNumber;
+        company.linkdin = url;
+        company.contacts = contacts;
+
         result.push(company);
 
         //add row to .csv
